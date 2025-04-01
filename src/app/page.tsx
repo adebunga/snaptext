@@ -1,46 +1,149 @@
-import Link from "next/link";
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import { Upload, FileText } from "lucide-react";
+import { createWorker } from 'tesseract.js';
 
 export default function Home() {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [extractedText, setExtractedText] = useState<string>("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Reset states
+      setError(null);
+      setExtractedText("");
+      setIsProcessing(true);
+      
+      try {
+        // Show image preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          setSelectedImage(e.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+
+        // Process image with Tesseract.js
+        const worker = await createWorker('eng');
+        const { data: { text } } = await worker.recognize(file);
+        await worker.terminate();
+
+        if (!text || text.trim().length === 0) {
+          throw new Error('No text could be extracted from this image');
+        }
+
+        setExtractedText(text.trim());
+      } catch (error) {
+        console.error('Error:', error);
+        setError(error instanceof Error ? error.message : 'Error processing image. Please try again.');
+        setExtractedText('');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  };
+
+  // Add drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const input = document.createElement('input');
+      input.files = e.dataTransfer.files;
+      handleImageUpload({ target: input } as any);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-8">
-      <div>
-        <h2 className="text-2xl font-semibold text-center border p-4 font-mono rounded-md">
-          Get started by choosing a template path from the /paths/ folder.
-        </h2>
-      </div>
-      <div>
-        <h1 className="text-6xl font-bold text-center">Make anything you imagine 🪄</h1>
-        <h2 className="text-2xl text-center font-light text-gray-500 pt-4">
-          This whole page will be replaced when you run your template path.
-        </h2>
-      </div>
-      <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">AI Chat App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            An intelligent conversational app powered by AI models, featuring real-time responses
-            and seamless integration with Next.js and various AI providers.
-          </p>
+    <main className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <nav className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-3xl font-bold text-gray-800">Image to Text</h1>
         </div>
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">AI Image Generation App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            Create images from text prompts using AI, powered by the Replicate API and Next.js.
-          </p>
-        </div>
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">Social Media App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            A feature-rich social platform with user profiles, posts, and interactions using
-            Firebase and Next.js.
-          </p>
-        </div>
-        <div className="border rounded-lg p-6 hover:bg-gray-100 transition-colors">
-          <h3 className="text-xl font-semibold">Voice Notes App</h3>
-          <p className="mt-2 text-sm text-gray-600">
-            A voice-based note-taking app with real-time transcription using Deepgram API, 
-            Firebase integration for storage, and a clean, simple interface built with Next.js.
-          </p>
+      </nav>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left Column - Image Upload */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div 
+              className="flex flex-col items-center justify-center min-h-[400px] border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
+              {selectedImage ? (
+                <div className="relative w-full h-[400px]">
+                  <Image
+                    src={selectedImage}
+                    alt="Uploaded image"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="text-center p-6">
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="mt-4">
+                    <label
+                      htmlFor="file-upload"
+                      className="cursor-pointer rounded-md bg-blue-500 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-600"
+                    >
+                      Upload Image
+                      <input
+                        id="file-upload"
+                        type="file"
+                        className="sr-only"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-500">or drop an image file</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Column - Extracted Text */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="h-5 w-5 text-gray-500" />
+              <h2 className="text-lg font-semibold text-gray-800">Extracted Text</h2>
+            </div>
+            <div className="min-h-[400px] border rounded-lg p-4 bg-gray-50">
+              {isProcessing ? (
+                <div className="flex flex-col items-center justify-center h-full gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                  <p className="text-sm text-gray-500">Processing image...</p>
+                </div>
+              ) : error ? (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <p className="text-red-500">{error}</p>
+                  <button
+                    onClick={() => setError(null)}
+                    className="mt-4 text-sm text-blue-500 hover:text-blue-600"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap text-gray-700">
+                  {extractedText || "Upload an image to see extracted text here..."}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </main>
